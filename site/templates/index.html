@@ -1,0 +1,15 @@
+$def with (scriptname)
+
+<html>
+    <head>
+        <title>Trigger Page</title>
+    </head>
+<body>
+
+$if scriptname:
+    successfully run script: $scriptname
+$else:
+    Failed to run script, no name given.
+
+</body>
+</html>
