@@ -1,18 +1,21 @@
 import web
 import subprocess
+import checkacpower
 
 
-
-
-
+#Site Setup
 urls = (
   '/trigger', 'trigger','/aircon', 'aircon', "/killapp", "killapp"
 )
-
-
 app = web.application(urls, globals())
-
 render = web.template.render('templates/')
+
+#IR Setup
+def irsend(button):
+    subprocess.call("irsend SEND_ONCE aircon %s" % button, shell=True)
+    return None
+
+#Webpages
 
 class trigger(object):
     def GET(self):
@@ -24,48 +27,68 @@ class trigger(object):
         else:
             return render.trigger(scriptname = None)
 
-
 class aircon(object):
     def GET(self):
         form = web.input(power=None,mode=None,fan=None,temp=None,abstemp=None)
         varcount = 1
+        power = form.power
         if form.power:
             varcount = None
-            subprocess.call("irsend SEND_ONCE aircon KEY_POWER", shell=True)
+            if form.power == "toggle":
+                irsend("KEY_POWER")
+            elif form.power == "on":
+                if checkacpower.getpowerstatus() == 0:
+                    irsend("KEY_POWER")
+                else:
+                    power = power + " (AC unit was already on. No IR trigger sent.)"
+            elif form.power == "off":
+                if checkacpower.getpowerstatus() == 1:
+                    irsend("KEY_POWER")
+                else:
+                    power = power + " (AC unit was already off. No IR trigger sent.)"
+            elif form.power == "status":
+                powerstatus = checkacpower.getpowerstatus()
+                if powerstatus == 1:
+                    powerstatus = "ON"
+                elif powerstatus == 0:
+                    powerstatus = "OFF"
+                else:
+                    powerstatus = "Error Reading Power Status"
+                power = "The Air Conditioner is Currently %s" % powerstatus
+            else:
+                power = 'INVALID VARIABLE GIVEN (%s).  Please use: "toggle", "on", "off", "status."' % power
         if form.mode:
             varcount = None
             mode = int(form.mode)
             for _ in range(mode):
-                subprocess.call("irsend Send_Once aircon KEY_MODE", shell=True)
+                irsend("KEY_MODE")
         if form.fan:
             varcount = None
             fan = int(form.fan)
             for _ in range(fan):
-                subprocess.call("irsend Send_Once aircon KEY_F", shell=True)
+                irsend("KEY_F")
         if form.temp:
             varcount = None
             temp = int(form.temp)
             if temp < 0:
                 for _ in range(abs(temp) + 1):
-                    subprocess.call("irsend SEND_ONCE aircon KEY_DOWN", shell=True)
+                    irsend("KEY_DOWN")
             if temp > 0:
                 for _ in range(temp + 1):
-                    subprocess.call("irsend SEND_ONCE aircon KEY_UP", shell=True)
+                    irsend("KEY_UP")
         if form.abstemp:
             varcount = None
             for _ in range(16):
-                subprocess.call("irsend SEND_ONCE aircon KEY_DOWN", shell=True)
+                irsend("KEY_DOWN")
             for _ in range(int(form.abstemp) - 64):
-                subprocess.call("irsend SEND_ONCE aircon KEY_UP", shell=True)                
+                irsend("KEY_UP")                
+        return render.aircon(power=power,mode=form.mode,fan=form.fan,temp=form.temp,abstemp=form.abstemp,error=varcount)
 
-        return render.aircon(power=form.power,mode=form.mode,fan=form.fan,temp=form.temp,abstemp=form.abstemp,error=varcount)
-
-
-#Currently doesn't work, doesn't actually exit program
 class killapp(object):
     def GET(self):
-        #close()
-        return "Triggered the Kill proccess (it has not nessiarily worked though)."
+        raise SystemExit
+        return "If you are seeing this the Kill Trigger did not work!  Try manually killing the python proccess from SSH."
+
 
 if __name__ == "__main__":
     app.run()
